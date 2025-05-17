@@ -1,8 +1,13 @@
 from typing import List, Any
 from fastapi import FastAPI, HTTPException
+from fastapi import Depends
+from fastapi.security import OAuth2PasswordBearer
 from .schema import Driver, Team, Race, UserStats, Bonus
+from jose import jwt, JWTError
 import httpx
 from .utils import calculate_points_with_bonus, placemnent_points
+import os
+
 
 # TODO: move env variables to a config file
 db_url = "http://localhost"
@@ -18,7 +23,19 @@ app = FastAPI(
         }
     ]
 )
-    
+
+SECRET_KEY = os.getenv("SECRET_KEY", "your_secret_key")
+ALGORITHM = "HS256"
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="http://0.0.0.0:8002/login")
+
+async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return {"username": payload.get("sub"), "role": payload.get("role")}
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
 
 @app.get(
     "/drivers",
@@ -118,10 +135,12 @@ async def get_leaderboard() -> List[dict]:
     response_model=Any,
     tags=["Admin Endpoints"]
 )
-async def create_team(team: Team):
+async def create_team(team: Team, current_user: dict = Depends(get_current_user)):
     """
     Create a new team.
     """
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized to create teams")
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(f"{db_url}:{db_port}/teams/", json=team.model_dump())
@@ -141,10 +160,12 @@ async def create_team(team: Team):
     response_model=Any,
     tags=["Admin Endpoints"]
 )
-async def delete_team(team_id: str):
+async def delete_team(team_id: str, current_user: dict = Depends(get_current_user)):
     """
     Delete a team.
     """
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized to delete teams")
     try:
         async with httpx.AsyncClient() as client:
             response = await client.delete(f"{db_url}:{db_port}/teams/{team_id}")
@@ -164,10 +185,12 @@ async def delete_team(team_id: str):
     response_model=Any,
     tags=["Admin Endpoints"]
 )
-async def create_driver(driver: Driver):
+async def create_driver(driver: Driver, current_user: dict = Depends(get_current_user)):
     """
     Create a new driver.
     """
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized to create drivers")
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(f"{db_url}:{db_port}/drivers/", json=driver.model_dump())
@@ -187,10 +210,12 @@ async def create_driver(driver: Driver):
     response_model=Any,
     tags=["Admin Endpoints"]
 )
-async def delete_driver(drivername: str):
+async def delete_driver(drivername: str, current_user: dict = Depends(get_current_user)):
     """
     Delete a driver.
     """
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized to delete drivers")
     try:
         async with httpx.AsyncClient() as client:
             response = await client.delete(f"{db_url}:{db_port}/drivers/{drivername}")
@@ -210,11 +235,13 @@ async def delete_driver(drivername: str):
     response_model=Any,
     tags=["Admin Endpoints"]
 )
-async def create_race(race: Race):
+async def create_race(race: Race, current_user: dict = Depends(get_current_user)):
     """
     Create race
     """
 
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized to create races")
     try:
         async with httpx.AsyncClient() as client:
             
@@ -257,10 +284,13 @@ async def create_race(race: Race):
     response_model=Any,
     tags=["Admin Endpoints"]
 )
-async def delete_race(race_id: str):
+async def delete_race(race_id: str, current_user: dict = Depends(get_current_user)):
     """
     Delete a race.
     """
+
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized to delete races")
     try:
         async with httpx.AsyncClient() as client:
             response = await client.delete(f"{db_url}:{db_port}/races/{race_id}")
@@ -276,11 +306,12 @@ async def delete_race(race_id: str):
 
 
 @app.post(
-    "/{username}/drivers",
+    "/buy_driver",
     response_model=Any,
     tags=["FantasyF1"]
 )
-async def buy_driver(username: str, drivername: str):
+async def buy_driver(drivername: str, current_user: dict = Depends(get_current_user)):
+    username = current_user["username"]
     async with httpx.AsyncClient() as client:
         user = (await client.get(f"{db_url}:{db_port}/users/{username}")).json()
         driver = (await client.get(f"{db_url}:{db_port}/drivers/{drivername}")).json()
@@ -302,11 +333,12 @@ async def buy_driver(username: str, drivername: str):
 
 
 @app.post(
-    "/{username}/teams",
+    "/buy_team",
     response_model=Any,
     tags=["FantasyF1"]
 )
-async def buy_team(username: str, teamname: str):
+async def buy_team(teamname: str, current_user: dict = Depends(get_current_user)):
+    username = current_user["username"]
     async with httpx.AsyncClient() as client:
         user = (await client.get(f"{db_url}:{db_port}/users/{username}")).json()
         teams = (await client.get(f"{db_url}:{db_port}/teams/")).json()
@@ -354,11 +386,12 @@ async def get_teams(username: str):
 
 
 @app.put(
-    "/{username}/drivers",
+    "/change_driver",
     response_model=UserStats,
     tags=["FantasyF1"]
 )
-async def change_driver(username: str, current_driver: str, new_driver: str):
+async def change_driver(current_driver: str, new_driver: str, current_user: dict = Depends(get_current_user)):
+    username = current_user["username"]
     async with httpx.AsyncClient() as client:
         user = (await client.get(f"{db_url}:{db_port}/users/{username}")).json()
 
@@ -379,11 +412,12 @@ async def change_driver(username: str, current_driver: str, new_driver: str):
 
 
 @app.put(
-    "/{username}/teams",
+    "/change_team",
     response_model=Any,
     tags=["FantasyF1"]
 )
-async def change_team(username: str, current_team: str, new_team: str):
+async def change_team(current_team: str, new_team: str, current_user: dict = Depends(get_current_user)):
+    username = current_user["username"]
     async with httpx.AsyncClient() as client:
         user = (await client.get(f"{db_url}:{db_port}/users/{username}")).json()
         teams = (await client.get(f"{db_url}:{db_port}/teams/")).json()
@@ -418,22 +452,24 @@ async def get_points(username: str):
 
 
 @app.get(
-    "/{username}/budget",
+    "/budget",
     response_model=Any,
     tags=["FantasyF1"]
 )
-async def get_budget(username: str):
+async def get_budget(current_user: dict = Depends(get_current_user)):
+    username = current_user["username"]
     async with httpx.AsyncClient() as client:
         user = (await client.get(f"{db_url}:{db_port}/users/{username}")).json()
         return user["total_budget"]
 
 
 @app.post(
-    "/{username}/bonuses",
+    "/buy_bonus",
     response_model=Any,
     tags=["FantasyF1"]
 )
-async def buy_bonus(username: str, target_name: str, bonus_type: Bonus):
+async def buy_bonus(target_name: str, bonus_type: Bonus, current_user: dict = Depends(get_current_user)):
+    username = current_user["username"]
     VALID_BONUSES = {"2x", "beat_teammate", "both_drivers"}
 
     if bonus_type not in VALID_BONUSES:
