@@ -2,7 +2,7 @@ from typing import List, Any
 from fastapi import FastAPI, HTTPException
 from .schema import Driver, Team, Race, UserStats, Bonus
 import httpx
-from utils import calculate_points_with_bonus, placemnent_points
+from .utils import calculate_points_with_bonus, placemnent_points
 
 # TODO: move env variables to a config file
 db_url = "http://localhost"
@@ -217,11 +217,15 @@ async def create_race(race: Race):
 
     try:
         async with httpx.AsyncClient() as client:
+            
+            drivers = (await client.get(f"{db_url}:{db_port}/drivers/")).json()
+            assert all(map(lambda x: x["name"] in race.standings, drivers)), "All drivers must be in the standings"
+
             response = await client.post(f"{db_url}:{db_port}/races/", json=race.model_dump())
             if response.status_code == 201:
 
                 users = (await client.get(f"{db_url}:{db_port}/users/")).json()
-                drivers = (await client.get(f"{db_url}:{db_port}/drivers/")).json()
+                
 
                 driver_objects = [next((d for d in drivers if d["name"] == driver_name), None) for driver_name in race.standings]
 
@@ -238,6 +242,9 @@ async def create_race(race: Race):
                 return response.json()
             else:
                 raise HTTPException(status_code=response.status_code, detail=response.json())
+            
+    except AssertionError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except HTTPException as e:
         raise e
     except Exception as e:
@@ -250,9 +257,9 @@ async def create_race(race: Race):
     response_model=Any,
     tags=["Admin Endpoints"]
 )
-async def delete_driver(race_id: str):
+async def delete_race(race_id: str):
     """
-    Delete a driver.
+    Delete a race.
     """
     try:
         async with httpx.AsyncClient() as client:
@@ -261,6 +268,8 @@ async def delete_driver(race_id: str):
                 return {"message": "Race deleted successfully."}
             else:
                 raise HTTPException(status_code=response.status_code, detail=response.json())
+    except HTTPException as e:
+        raise e
     except Exception as e:
         print(f"Error deleting race: {e}")
         raise HTTPException(status_code=500, detail=str(e))

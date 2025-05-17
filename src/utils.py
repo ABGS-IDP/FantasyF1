@@ -1,4 +1,4 @@
-from schema import Bonus
+from .schema import Bonus
 from functools import reduce
 
 placemnent_points = [ 25, 18, 15, 12, 10, 8, 6, 4, 2, 1 ]
@@ -15,18 +15,22 @@ def calculate_points_with_bonus(driver: dict, user: dict, points: int, drivers: 
     try:
         if Bonus.twox in bonuses[driver["name"]]:
             points_from_drivers = points_from_drivers * 2
+            bonuses[driver["name"]].remove(Bonus.twox)
         if Bonus.twox in bonuses[driver["team"]]:
             points_from_teams = points_from_teams * 2
+            bonuses[driver["team"]].remove(Bonus.twox)
     except Exception:
         pass
     try:
         if Bonus.beat_teammate in bonuses[driver["name"]]:
             points_from_drivers += 30 * (list(filter(lambda x: x["team"] == driver["team"], drivers))[0]['name'] == driver["name"])
+            bonuses[driver["name"]].remove(Bonus.beat_teammate)
     except Exception:
         pass
     try:
         if Bonus.both_drivers in bonuses[driver["team"]]:
-            points_from_teams += 30 * (len(list(filter(lambda x: x["team"] == driver["team"], drivers))) == 2)
+            points_from_teams += 60 * (len(list(filter(lambda x: x["team"] == driver["team"], drivers))) == 2)
+            bonuses[driver["team"]].remove(Bonus.both_drivers)
     except Exception:
         pass
 
