@@ -1,11 +1,13 @@
 from typing import List, Any
 from fastapi import FastAPI, HTTPException
-from .models import Driver, Team
+from .schema import Driver, Team, Race, UserStats, Bonus
 import httpx
+from utils import calculate_points_with_bonus, placemnent_points
 
 # TODO: move env variables to a config file
 db_url = "http://localhost"
 db_port = 8000
+
 
 # FastAPI app
 app = FastAPI(
@@ -208,14 +210,31 @@ async def delete_driver(drivername: str):
     response_model=Any,
     tags=["Admin Endpoints"]
 )
-async def create_race():
+async def create_race(race: Race):
     """
     Create race
     """
+
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.post(f"{db_url}:{db_port}/races/")
+            response = await client.post(f"{db_url}:{db_port}/races/", json=race.model_dump())
             if response.status_code == 201:
+
+                users = (await client.get(f"{db_url}:{db_port}/users/")).json()
+                drivers = (await client.get(f"{db_url}:{db_port}/drivers/")).json()
+
+                driver_objects = [next((d for d in drivers if d["name"] == driver_name), None) for driver_name in race.standings]
+
+                for driver_name, points_gained in zip(race.standings, placemnent_points):
+                    driver = next((d for d in drivers if d["name"] == driver_name), None)
+                    if driver:
+                        driver["championship_points"] += points_gained
+                        await client.put(f"{db_url}:{db_port}/drivers/{driver_name}", json=driver)
+
+                        for user in users:
+                            calculate_points_with_bonus(driver, user, points_gained, driver_objects)
+                            await client.put(f"{db_url}:{db_port}/users/{user['username']}", json=user)
+
                 return response.json()
             else:
                 raise HTTPException(status_code=response.status_code, detail=response.json())
@@ -327,7 +346,7 @@ async def get_teams(username: str):
 
 @app.put(
     "/{username}/drivers",
-    response_model=Any,
+    response_model=UserStats,
     tags=["FantasyF1"]
 )
 async def change_driver(username: str, current_driver: str, new_driver: str):
@@ -347,7 +366,7 @@ async def change_driver(username: str, current_driver: str, new_driver: str):
         user["total_budget"] -= new_driver_data["price"]
 
         await client.put(f"{db_url}:{db_port}/users/{username}", json=user)
-        return user
+        return UserStats(**user)
 
 
 @app.put(
@@ -405,7 +424,7 @@ async def get_budget(username: str):
     response_model=Any,
     tags=["FantasyF1"]
 )
-async def buy_bonus(username: str, bonus_type: str, target_name: str):
+async def buy_bonus(username: str, target_name: str, bonus_type: Bonus):
     VALID_BONUSES = {"2x", "beat_teammate", "both_drivers"}
 
     if bonus_type not in VALID_BONUSES:
