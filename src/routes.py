@@ -289,7 +289,7 @@ async def buy_driver(username: str, drivername: str):
         user["total_budget"] -= driver["price"]
 
         await client.put(f"{db_url}:{db_port}/users/{username}", json=user)
-        return user
+        return UserStats(**user)
 
 
 @app.post(
@@ -319,7 +319,7 @@ async def buy_team(username: str, teamname: str):
         user["total_budget"] -= team_data["price"]
 
         await client.put(f"{db_url}:{db_port}/users/{username}", json=user)
-        return user
+        return UserStats(**user)
 
 
 @app.get(
@@ -394,7 +394,7 @@ async def change_team(username: str, current_team: str, new_team: str):
         user["total_budget"] -= new_team_data["price"]
 
         await client.put(f"{db_url}:{db_port}/users/{username}", json=user)
-        return user
+        return UserStats(**user)
 
 
 @app.get(
@@ -449,4 +449,4 @@ async def buy_bonus(username: str, target_name: str, bonus_type: Bonus):
         user["total_budget"] -= 1.0
 
         await client.put(f"{db_url}:{db_port}/users/{username}", json=user)
-        return user
+        return UserStats(**user)
