@@ -12,7 +12,6 @@ import os
 # TODO: move env variables to a config file
 db_url = os.getenv("DBAPI_URL")
 db_port = int(os.getenv("DBAPI_PORT", 8000))
-AUTH_PORT = int(os.getenv("AUTH_PORT", 8002))
 AUTH_URL = os.getenv("AUTH_URL")
 
 # FastAPI app
@@ -29,7 +28,7 @@ app = FastAPI(
 SECRET_KEY = os.getenv("SECRET_KEY", "your_secret_key")
 ALGORITHM = "HS256"
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{AUTH_URL}:{AUTH_PORT}/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{AUTH_URL}/login")
 
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     try:
