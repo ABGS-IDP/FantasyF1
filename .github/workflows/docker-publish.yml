@@ -29,3 +29,10 @@ jobs:
         context: .
         push: true
         tags: ${{ secrets.DOCKER_USERNAME }}/fantasyf1:latest
+
+    - name: Repository Dispatch
+      uses: peter-evans/repository-dispatch@v3
+      with:
+        token: ${{ secrets.GH_PAT }}
+        repository: ABGS-IDP/Integration
+        event-type: swarm-deploy
