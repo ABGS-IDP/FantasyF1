@@ -17,6 +17,7 @@ AUTH_URL = os.getenv("AUTH_URL")
 
 # FastAPI app
 app = FastAPI(
+    root_path="/api",
     openapi_tags=[
         {
             "name": "FantasyF1",
